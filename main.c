@@ -1,7 +1,7 @@
 /*
  *  ======== main.c ========
  *
- *  Authors: 
+ *  Authors: Sami Rapakko & Elina Heikkinen
  *
  */
 
