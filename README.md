@@ -1,3 +1,11 @@
+
+
+
+## Main Contributors and creators
+
+Sami Rapakko and Elina Heikkinen
+
+
 ## Example Summary
 
 This example is intended to be a starting point for new development where
