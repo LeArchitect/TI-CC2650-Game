@@ -14,6 +14,7 @@ extern const tImage tank;
 
 // Ending
 extern const tImage ending;
+extern const tImage quit;
 
 // Character
 extern const tImage char_anim_1;
@@ -30,6 +31,8 @@ extern const tImage obs_tree_2;
 extern const tImage left_side_rev;
 extern const tImage left_rev;
 extern const tImage right_rev;
+extern const tImage left5_rev;
+extern const tImage right5_rev;
 extern const tImage ending_rev;
 
 #endif // __SPLASH_IMAGE_H__

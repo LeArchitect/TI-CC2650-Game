@@ -1,9 +1,10 @@
 /*
  *  ======== main.c ========
  *
- *  Authors: Sami Rapakko & Elina Heikkinen
+ *  Authors: 
  *
  */
+
 
 /* XDCtools Header files */
 #include <ti/sysbios/BIOS.h>
@@ -53,7 +54,7 @@ enum menuStates { PICK=1, CALIB, OTHER };
 enum gameStates { READY=1, READ_SENSOR, MSG_WAITING, MSG_PICK, MSG_SEND };
 
 enum mainStates mainState = MENU;
-enum menuStates menuState = OTHER; // no buttons/sensors
+enum menuStates menuState = OTHER; // no buttons or sensors
 enum gameStates gameState = READY;
 
 // Menu variables
@@ -62,10 +63,13 @@ uint8_t menurow=1;
 uint8_t menuselect=0;
 uint8_t calib_help=2;
 uint8_t ledstate=0;
+uint8_t wait=0;
 
 // Game variables
 uint8_t lost=0;
 uint16_t level=0;
+uint8_t change=0;
+uint8_t counter=0;
 uint8_t messagenum=1;
 uint8_t playerRight=0;
 uint8_t playerJump=0;
@@ -74,8 +78,6 @@ uint8_t row1[4]={0,0,0,0}, row2[4]={0,0,0,0}, row3[4]={0,0,0,0}, row4[4]={0,0,0,
 float left_rate=-30, right_rate=30, up_rate=-30, down_rate=30;
 
 // Strings and messages
-// char test[32];
-char str[16];
 char payload[16];
 char msg[16];
 uint16_t senderAddr;
@@ -133,27 +135,32 @@ PIN_Config cLed[] = {
 /* Handler for Button0 */
 Void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     
-    if (mainState == MENU && menuState == PICK) {
+    // Move in menu
+    if (mainState == MENU && menuState == PICK && wait == 0) {
         if (menurow == 5) {
             menurow = 0;
     	}
     	menurow++;
+    	wait = 1;
     }
     
+    // Show help in calibration
     else if (mainState == MENU && menuState == CALIB) {
         calib_help = 1;
     }
     
-    else if (mainState == GAME && gameState == READY) {
-        if (messagenum == 7) {
-    	    messagenum = 1;
+    // Choose from messages in game
+    else if (mainState == GAME && gameState == READY && wait == 0) {
+        if (messagenum > 8) {
+    	    messagenum = 8;
     	}
-    	else if (messagenum > 7) {
-    	    messagenum = 7;
+    	else if (messagenum == 8) {
+    	    messagenum = 1;
     	}
         else {
             messagenum++;
         }
+        wait=1;
         gameState = MSG_PICK;
     }
 }
@@ -162,27 +169,34 @@ Void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 /* Handler for power button */
 Void powerButtonFxn(PIN_Handle handle, PIN_Id pinId) {
     
+    // Select from menu
     if (mainState == MENU && menuState == PICK) {
         if (menuselect == 0) {
             menuselect = 1;
         }
     }
     
+    // No help in calibration
     else if (mainState == MENU && menuState == CALIB) {
         calib_help = 0;
     }
     
+    // Select message to send in game    
     else if (mainState == GAME && gameState == READY) {
         if (messagenum < 7) {
             gameState = MSG_SEND;
+        }
+        else if (messagenum == 7) {
+            mainState = MENU;
         }
     }
 }
 
 
-/* Interruption for sensor reading */
+/* Interruption to read mpu */
 Void clkFxn(UArg arg0) {
 
+    // Check gyrosensor values four times per second
     if (mainState == GAME && gameState == READY) {
         gameState = READ_SENSOR;
     }
@@ -201,11 +215,11 @@ Void commTask(UArg arg0, UArg arg1) {
 
     while (1) {
         
+        // Handle received message
         if (GetRXFlag() == true && mainState == GAME && gameState == READY) {
             gameState = MSG_WAITING;
         }
         
-        // TODO: optimize
         Task_sleep(1000/Clock_tickPeriod);
     }
 }
@@ -227,8 +241,6 @@ Void mainTask(UArg arg0, UArg arg1) {
     
     // Intro
     intro(pContext);
-    
-    game_over(pContext, level);
     
     /* i2c for other sensors */
     I2C_Handle      i2c;
@@ -285,126 +297,150 @@ Void mainTask(UArg arg0, UArg arg1) {
     I2C_close(i2c);
     
     // Check sensor values
-    
+    slippery=0, other_tree=0, dark=0, cold=0;
     check_sensors(&i2c, &i2cParams, &slippery, &other_tree, &dark, &cold);
+    // Update gyro rates accordingly
     update_rates(slippery, &left_rate, &right_rate, &up_rate, &down_rate);
     
-    Display_clear(hDisplay);
-
+    // Check led state
     ledstate = PIN_getOutputValue(Board_LED0);
+    
+    // Print menu
+    Display_clear(hDisplay);
+    print_lines(pContext);
+    print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
+    
+    menuState = PICK;
     
     // Main loop
     while (1) {
         
-        switch (mainState) {
+        menuselect = 0;
+        wait = 0;
+        
+        switch (menurow) {
             
-            case MENU:
-                print_rows(pContext);
+            // Start Game
+            case 1:
+                i1=3, i2=1, i3=1, i4=1, i5=1;
                 print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
-                
-                menuState = PICK;
-                
-                while (mainState == MENU) {
-                    
-                    menuselect = 0;
-                    
-                    switch (menurow) {
-                        
-                        case 1:
-                            i1=3, i2=1, i3=1, i4=1, i5=1;
-                            print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
             
-                            if (menurow == 1 && menuselect == 1) {    
-                                Display_doClearLines(hDisplay, 2, 9);
-                                Display_print0(hDisplay, 6, 1, "Game  starting...");
-                                Task_sleep(1000000 / Clock_tickPeriod);
-                                Display_doClearLines(hDisplay, 2, 9);
-                                mainState = GAME;
-                                game(&i2cMPU, &i2cMPUParams);
-                                menuState = PICK;
-                                print_rows(pContext);
-                            }
-                            break;
-                        
-                        case 2:
-                            i1=1, i2=3, i3=1, i4=1, i5=1;
-                            print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
-            
-                            if (menurow == 2 && menuselect == 1) {  
-                                menuState = OTHER;
-                                help(pContext);
-                                menuState = PICK;
-                            }
-                            break;
-
-                        case 3:
-                            i1=1, i2=1, i3=3, i4=1, i5=1;
-                            print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
-            
-                            if (menurow == 3 && menuselect == 1) {
-                                menuState = CALIB;
-                                calib_start();
-                                
-                                while (calib_help == 2) {
-                                    Task_sleep(500000 / Clock_tickPeriod);
-                                }
-                
-                                left_rate=0, right_rate=0, up_rate=0, down_rate=0;
-                                calibrate(&i2cMPU, &i2cMPUParams, &left_rate, &right_rate, &up_rate, &down_rate, calib_help);
-                                update_rates(slippery, &left_rate, &right_rate, &up_rate, &down_rate);
-                                calib_help = 2;
-                                menuState = PICK;
-                                print_rows(pContext);
-                            }
-                            break;
-                            
-                        case 4:
-                            i1=1, i2=1, i3=1, i4=3, i5=1;
-                            print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
-            
-                            if (menurow == 4 && menuselect == 1) {
-                                PIN_setOutputValue( hLed, Board_LED0, !PIN_getOutputValue( Board_LED0 ) );
-                                ledstate = PIN_getOutputValue(Board_LED0);
-                                menurow = 4;
-                                print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
-                            }
-                            break;
-                        
-                        case 5:
-                            i1=1, i2=1, i3=1, i4=1, i5=3;
-                            print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
-            
-                            if (menurow == 5 && menuselect == 1) {
-                                menuState = OTHER;
-                                Display_clear(hDisplay);
-                                Display_print0(hDisplay, 6, 1, "Bye Bye!! :(");                        
-                                Task_sleep(2000000 / Clock_tickPeriod);                        
-                                Display_clear(hDisplay);
-                                Display_close(hDisplay);
-                                PIN_setOutputValue( hLed, Board_LED0, PIN_getOutputValue(0) );    
-                                Task_sleep(100000 / Clock_tickPeriod);        
-                    	        PIN_close(hPowerButton);
-                                PINCC26XX_setWakeup(cPowerWake);
-                    	        Power_shutdown(NULL,0);
-                            }
-                            break;
-                            
-                    }
-                    
+                // Wait for button press
+                while (menurow == 1 && menuselect == 0) {
                     Task_sleep(10000 / Clock_tickPeriod);
-            
+                }
+                
+                // User chose to play game
+                if (menurow == 1 && menuselect == 1) {
+                    Display_doClearLines(hDisplay, 2, 9);
+                    mainState = GAME;
+                    game(&i2cMPU, &i2cMPUParams);
+                    Display_clear(hDisplay);
+                    print_lines(pContext);
                 }
                 break;
             
-            case GAME:
+            
+            // Help
+            case 2:
+                i1=1, i2=3, i3=1, i4=1, i5=1;
+                print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
                 
+                // Wait for button press
+                while (menurow == 2 && menuselect == 0) {
+                    Task_sleep(10000 / Clock_tickPeriod);
+                }
+                
+                // User chose to view help
+                if (menurow == 2 && menuselect == 1) {  
+                    menuState = OTHER;
+                    help(pContext);
+                    menuState = PICK;
+                }
                 break;
 
+
+            // Calibration
+            case 3:
+                i1=1, i2=1, i3=3, i4=1, i5=1;
+                print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
+                
+                // Wait for button press
+                while (menurow == 3 && menuselect == 0) {
+                    Task_sleep(10000 / Clock_tickPeriod);
+                }
+            
+                // User chose to calibrate device
+                if (menurow == 3 && menuselect == 1) {
+                    menuState = CALIB;
+                    calib_help = 2;
+                    calib_start();
+                    
+                    // Wait for button press
+                    while (calib_help == 2) {
+                        Task_sleep(500000 / Clock_tickPeriod);
+                    }
+                
+                    left_rate=0, right_rate=0, up_rate=0, down_rate=0;
+                    calibrate(&i2cMPU, &i2cMPUParams, &left_rate, &right_rate, &up_rate, &down_rate, calib_help);
+                    update_rates(slippery, &left_rate, &right_rate, &up_rate, &down_rate);
+                    menuState = PICK;
+                    print_lines(pContext);
+                }
+                break;
+                
+                
+            // Led
+            case 4:
+                i1=1, i2=1, i3=1, i4=3, i5=1;
+                print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
+                
+                // Wait for button press
+                while (menurow == 4 && menuselect == 0) {
+                    Task_sleep(10000 / Clock_tickPeriod);
+                }
+                
+                // User chose to change led state
+                if (menurow == 4 && menuselect == 1) {
+                    PIN_setOutputValue( hLed, Board_LED0, !PIN_getOutputValue( Board_LED0 ) );
+                    ledstate = PIN_getOutputValue(Board_LED0);
+                    menurow = 4;
+                    print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
+                }
+                break;
+            
+            
+            // Quit
+            case 5:
+                i1=1, i2=1, i3=1, i4=1, i5=3;
+                print_menu(pContext, &i1, &i2, &i3, &i4, &i5, &menurow, &ledstate);
+                
+                // Wait for button press
+                while (menurow == 5 && menuselect == 0) {
+                    Task_sleep(10000 / Clock_tickPeriod);
+                }
+            
+                // User chose to quit
+                if (menurow == 5 && menuselect == 1) {
+                    menuState = OTHER;
+                    Display_clear(hDisplay);
+                    GrImageDraw(pContext, &quit,0,0);
+                    GrFlush(pContext);                
+                    Task_sleep(5000000 / Clock_tickPeriod);                        
+                    Display_clear(hDisplay);
+                    Display_close(hDisplay);
+                    PIN_setOutputValue( hLed, Board_LED0, 0 );
+                    Task_sleep(100000 / Clock_tickPeriod);        
+                    PIN_close(hPowerButton);
+                    PINCC26XX_setWakeup(cPowerWake);
+                    Power_shutdown(NULL,0);
+                }
+                break;
+                
         }
         
-        // Do not remove sleep-call from here!
-    	Task_sleep(1000000 / Clock_tickPeriod);
-    	
+        Task_sleep(150000 / Clock_tickPeriod);
+
     }
     // MPU9250 POWER OFF 
 	// Because of loop forever, code never goes here
@@ -412,6 +448,7 @@ Void mainTask(UArg arg0, UArg arg1) {
 }
 
 
+/* Game function */
 void game(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr) {
     
     I2C_Handle      i2cMPU;
@@ -421,12 +458,16 @@ void game(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr) {
     
     pContext = DisplayExt_getGrlibContext(hDisplay);
     
-    // TODO: alkuvalmistelut();
+    // Game preparations
+    wait = 0;
     lost = 0;
     level = 0;
+    counter = 0;
+    messagenum = 8;
     show_level(level);
-    messagenum=7;
     field(pContext, dark, ledstate);
+    
+    // Empty road rows
     memset(row1,0,4);
     memset(row2,0,4);
     memset(row3,0,4);
@@ -435,63 +476,94 @@ void game(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr) {
     
     gameState = READY;
     
+    // Game loop
     while (mainState == GAME) {
+        
         switch (gameState) {
             
+            // Read motion sensor values and update character position
             case READ_SENSOR:
-                read_mpu(&i2cMPU, &i2cMPUParams, &left_rate, &right_rate, &up_rate, &down_rate, &playerRight, &playerJump);
-                update_player(pContext, &playerRight, &playerJump, &cold, &row5[0], &other_tree);
-                check_if_lost(&lost, &row5[0], &playerRight, &playerJump);
-                if (lost == 1) {
-                    game_over(pContext, level);
-                    mainState = MENU;
+                read_mpu(&i2cMPU, &i2cMPUParams, &left_rate, &right_rate, &up_rate, &down_rate, &playerRight, &playerJump, &change);
+                update_player(pContext, &playerRight, &playerJump, &cold, &row5[0], &other_tree, change);
+                
+                // Character position changed
+                if (change == 1) {
+                    check_if_lost(&lost, &row5[0], &playerRight, &playerJump);
+                    
+                    // Player lost the game
+                    if (lost == 1) {
+                        update_player(pContext, &playerRight, &playerJump, &cold, &row5[0], &other_tree, 0);
+                        update_road_row(pContext, row5, 5, other_tree);
+                        game_over(pContext, level);
+                        mainState = MENU;
+                    }
+                }
+                
+                // Get rid of "double-clicks"
+                // Allow new button0 press after two sensor checks
+                counter++;
+                if (counter == 2) {
+                    counter = 0;
+                    wait=0;
                 }
                 
                 gameState = READY;
                 break;
             
+            
+            // Read server message and update screen
             case MSG_WAITING:
-                // Reset message
                 memset(payload,0,16);
-                // Read message
                 Receive6LoWPAN(&senderAddr, payload, 16);
                 
                 handle_msg(&senderAddr, &payload[0], &row1[0], &row2[0], &row3[0], &row4[0], &row5[0], dark, ledstate);
                 update_road(pContext, &row1[0], &row2[0], &row3[0], &row4[0], &row5[0], other_tree, dark, ledstate);
+                update_player(pContext, &playerRight, &playerJump, &cold, &row5[0], &other_tree, 0);
                 check_if_lost(&lost, &row5[0], &playerRight, &playerJump);
+                
+                // Player lost the game
                 if (lost == 1) {
+                    update_player(pContext, &playerRight, &playerJump, &cold, &row5[0], &other_tree, 0);
+                    update_road_row(pContext, row5, 5, other_tree);
                     game_over(pContext, level);
                     mainState = MENU;
                 }
-                if (senderAddr == IEEE80154_SERVER_ADDR) {
+                
+                // Increase score
+                else if (senderAddr == IEEE80154_SERVER_ADDR) {
                     level++;
                     show_level(level);
                 }
+                
                 gameState = READY;
                 break;
                 
+                
+            // Show chosen message on screen
             case MSG_PICK:
                 messages();
                 gameState = READY;
                 break;
             
+            
+            // Send chosen message
             case MSG_SEND:
-                // send to everyone: 0xFFFF
                 Send6LoWPAN(IEEE80154_SERVER_ADDR, msg, strlen(msg));
                 StartReceive6LoWPAN();
                 Display_doClearLines(hDisplay, 11, 11);
                 Display_print0(hDisplay, 11, 0, "Message sent!");
-                messagenum=8;
+                messagenum=9;
                 gameState = READY;
                 break;
                 
         }
-        // TODO: optimize
+        
         Task_sleep(5000/Clock_tickPeriod);
     }
 }
 
 
+// Shows the messages that player can send to server
 void messages(void) {
     switch(messagenum) {
         case 1:
@@ -519,6 +591,9 @@ void messages(void) {
             Display_print0(hDisplay, 11, 0, "Send your score");
             break;
         case 7:
+            Display_print0(hDisplay, 11, 0, "Quit game");
+            break;
+        case 8:
             Display_doClearLines(hDisplay, 11, 11);
             break;
     }
@@ -561,6 +636,12 @@ Int main(void) {
     hLed = PIN_open(&sLed, cLed);
     if(!hLed) {
         System_abort("Error initializing LED pin\n");
+    }
+    
+    /* Mpu */
+    hMpuPin = PIN_open(&MpuPinState, MpuPinConfig);
+    if (hMpuPin == NULL) {
+    	System_abort("Pin open failed!");
     }
     
     /* Init clock */

@@ -6,19 +6,14 @@
 
 
 /* XDCtools Header files */
-// #include <xdc/std.h>
 #include <xdc/runtime/System.h>
-// #include <ti/sysbios/BIOS.h>
 #include <ti/sysbios/knl/Task.h>
 #include <ti/sysbios/knl/Clock.h>
 
 /* TI-RTOS Header files */
 #include <ti/drivers/I2C.h>
-// #include <ti/drivers/PIN.h>
-// #include <ti/drivers/pin/PINCC26XX.h>
 #include <ti/drivers/i2c/I2CCC26XX.h>
 #include <ti/mw/display/Display.h>
-// #include <ti/mw/display/DisplayExt.h>
 
 /* Board Header files */
 #include "Board.h"
@@ -35,9 +30,9 @@ Display_Handle hDisplay;
 
 void minmaxmean(float *array, uint8_t size, float *min, float *max, float *mean) {
     
-    // calculates the minimum, maximum and mean of an array of floats
+    // Calculates the minimum, maximum and mean of an array of floats
 
-    float maximum, minimum, sum;
+    float minimum, maximum, sum;
     maximum = *array;
     minimum = *array;
     sum = *array; 
@@ -65,7 +60,7 @@ void minmaxmean(float *array, uint8_t size, float *min, float *max, float *mean)
 
 void instructions1() {
     
-    // prints the first set of instructions on the device screen
+    // Prints the first set of instructions on the device screen
     
     Display_clear(hDisplay);
     Task_sleep(1000000 / Clock_tickPeriod);
@@ -113,7 +108,7 @@ void instructions1() {
 
 void rest_part(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *rest_gz_min_addr, float *rest_gz_max_addr, float *rest_gx_min_addr, float *rest_gx_max_addr) {
     
-    // rest part
+    // Sensor values when keeping the device still
     
     I2C_Handle      i2cMPU;
     I2C_Params      i2cMPUParams;
@@ -179,7 +174,7 @@ void rest_part(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *rest_gz_
 
 void instructions2() {
     
-    // instructions for rotating to the left
+    // Instructions for rotating to the left
     
     Display_clear(hDisplay);
     Task_sleep(1000000 / Clock_tickPeriod);
@@ -257,7 +252,7 @@ void instructions2() {
 
 void instructions3() {
     
-    // instructions for rotating to the right
+    // Instructions for rotating to the right
     
     Display_clear(hDisplay);
     Task_sleep(1000000 / Clock_tickPeriod);
@@ -286,7 +281,7 @@ void instructions3() {
 
 void instructions4() {
     
-    // instructions for rotating upwards
+    // Instructions for rotating upwards
     
     Display_clear(hDisplay);
     Task_sleep(1000000 / Clock_tickPeriod);
@@ -342,7 +337,7 @@ void instructions4() {
 
 void instructions5() {
     
-    // instructions for rotating downwards
+    // Instructions for rotating downwards
     
     Display_clear(hDisplay);
     Task_sleep(1000000 / Clock_tickPeriod);
@@ -371,7 +366,7 @@ void instructions5() {
 
 void move_part(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *move_rate_addr, uint8_t direction) {
     
-    // move part
+    // Sensor values when rotating the device
     
     I2C_Handle      i2cMPU;
     I2C_Params      i2cMPUParams;
@@ -419,7 +414,7 @@ void move_part(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *move_rat
     float values[10];
     float ax, ay, az, gx, gy, gz;
     
-    if ((direction == 1) | (direction == 2)) {
+    if ((direction == 1) || (direction == 2)) {
         for (i=0; i<10; i++) {
             mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
     	    values[i] = gz;
@@ -427,7 +422,7 @@ void move_part(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *move_rat
         }
     }
     
-    if ((direction == 3) | (direction == 4)) {
+    if ((direction == 3) || (direction == 4)) {
         for (i=0; i<10; i++) {
             mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
     	    values[i] = gx;
@@ -471,7 +466,7 @@ void move_part(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *move_rat
 
 void oops(uint8_t direction) {
     
-    // something went wrong...
+    // Something went wrong...
     
     Display_clear(hDisplay);
     Task_sleep(1000000 / Clock_tickPeriod);
@@ -527,7 +522,15 @@ void oops(uint8_t direction) {
 
 void calibrate(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *left_rate, float *right_rate, float *up_rate, float *down_rate, uint8_t help) {
     
-    // calibrates mpu
+    // Calibrates the motion sensor
+    
+    // First asks user to keep device still
+    // Collects motion sensor values during this
+    
+    // Then asks user to rotate device in a certain direction
+    // During rotation, collects motion sensor values
+    // Calculates average value and uses it to move in the game
+    // Compares average rate to rest values and checks if it makes sense
     
     I2C_Handle      i2cMPU;
     I2C_Params      i2cMPUParams;
@@ -567,6 +570,7 @@ void calibrate(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *left_rat
     
     move_part(&i2cMPU, &i2cMPUParams, left_rate, 1);
     
+    // Turn left: gz < 0
     while (*left_rate > rest_gz_min) {
         oops(1);
         move_part(&i2cMPU, &i2cMPUParams, left_rate, 1);
@@ -595,6 +599,7 @@ void calibrate(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *left_rat
     
     move_part(&i2cMPU, &i2cMPUParams, right_rate, 2);
     
+    // Turn right: gz > 0
     while (*right_rate < rest_gz_max) {
         oops(2);
         move_part(&i2cMPU, &i2cMPUParams, right_rate, 2);
@@ -622,6 +627,7 @@ void calibrate(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *left_rat
     
     move_part(&i2cMPU, &i2cMPUParams, up_rate, 3);
     
+    // Turn upwards: gx < 0
     while (*up_rate > rest_gx_min) {
         oops(3);
         move_part(&i2cMPU, &i2cMPUParams, up_rate, 3);
@@ -649,6 +655,7 @@ void calibrate(I2C_Handle *i2c_addr, I2C_Params *i2cParams_addr, float *left_rat
     
     move_part(&i2cMPU, &i2cMPUParams, down_rate, 4);
     
+    // Turn downwards: gx > 0
     while (*down_rate < rest_gx_max) {
         oops(4);
         move_part(&i2cMPU, &i2cMPUParams, down_rate, 4);
