@@ -3,7 +3,8 @@
 
 ## Main Contributors and creators
 
-Sami Rapakko and Elina Heikkinen
+
+Sami Rapakko and Elina Heikkinen if not specified other wise.
 
 
 ## Example Summary
