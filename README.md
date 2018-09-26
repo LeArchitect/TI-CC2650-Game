@@ -1,8 +1,11 @@
 
 
+## Main Contributors of this fork.
 
-## Main Contributors and creators
+Sami Rapakko, Lauri Haverinen, Emre Arkan and Vesa Similä.
 
+
+## Main Contributors and creators of the basecode of Main, calibration, functions and graphics.
 
 Sami Rapakko and Elina Heikkinen if not specified other wise.
 
